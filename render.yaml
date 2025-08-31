@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: voip-system
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 app_direct_mysql:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://voip_user:voip_password@voip-db.internal:5432/voip_system
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ASTERISK_AMI_HOST
+        value: 10.198.215.71
+      - key: ASTERISK_AMI_PORT
+        value: 5038
+      - key: ASTERISK_AMI_USERNAME
+        value: admin
+      - key: ASTERISK_AMI_SECRET
+        value: admin
+
+databases:
+  - name: voip-db
+    databaseName: voip_system
+    user: voip_user
+    plan: free

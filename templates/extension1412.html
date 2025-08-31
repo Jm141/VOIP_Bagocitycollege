@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Extension 1412 - Call Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-phone"></i> Extension 1412 - Flask VOIP System</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Status:</strong> This extension forwards all incoming calls to your Flask VOIP system.
+                        <br>
+                        <strong>External Access:</strong> Calls can reach this extension from your online Asterisk server at voip1-bagocitycollege.pagenet.info:5060
+                    </div>
+                    
+                    <!-- Current Call Display -->
+                    <div id="currentCall" class="card mb-3" style="display: none;">
+                        <div class="card-header bg-success text-white">
+                            <h5><i class="fas fa-phone-volume"></i> Active Call</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Call ID:</strong> <span id="callId"></span></p>
+                                    <p><strong>Caller ID:</strong> <span id="callerId"></span></p>
+                                    <p><strong>Extension:</strong> <span id="extension"></span></p>
+                                    <p><strong>Channel:</strong> <span id="channel"></span></p>
+                                    <p><strong>Status:</strong> <span id="callStatus" class="badge badge-warning">Ringing</span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="btn-group-vertical w-100">
+                                        <button id="answerBtn" class="btn btn-success btn-lg mb-2" onclick="answerCall()">
+                                            <i class="fas fa-phone"></i> Answer Call
+                                        </button>
+                                        <button id="hangupBtn" class="btn btn-danger btn-lg" onclick="hangupCall()">
+                                            <i class="fas fa-phone-slash"></i> Hang Up
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Call History -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-history"></i> Recent Calls to Extension 1412</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Call ID</th>
+                                            <th>Caller ID</th>
+                                            <th>Status</th>
+                                            <th>Start Time</th>
+                                            <th>Duration</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="callHistory">
+                                        <!-- Call history will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call Management JavaScript -->
+<script>
+let currentCallData = null;
+
+// Socket.IO event listeners
+socket.on('incoming_call_1412', function(data) {
+    console.log('Incoming call to extension 1412:', data);
+    displayCurrentCall(data);
+    updateCallHistory();
+});
+
+// Display current call
+function displayCurrentCall(callData) {
+    currentCallData = callData;
+    document.getElementById('callId').textContent = callData.call_id;
+    document.getElementById('callerId').textContent = callData.caller_id;
+    document.getElementById('extension').textContent = callData.extension;
+    document.getElementById('channel').textContent = callData.channel;
+    document.getElementById('currentCall').style.display = 'block';
+    
+    // Enable answer button
+    document.getElementById('answerBtn').disabled = false;
+    document.getElementById('hangupBtn').disabled = false;
+}
+
+// Answer call
+function answerCall() {
+    if (!currentCallData) return;
+    
+    fetch('/asterisk/answer_call', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `call_id=${currentCallData.call_id}&channel=${currentCallData.channel}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('callStatus').textContent = 'Answered';
+            document.getElementById('callStatus').className = 'badge badge-success';
+            document.getElementById('answerBtn').disabled = true;
+            showAlert('Call answered successfully!', 'success');
+        } else {
+            showAlert('Failed to answer call: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error answering call:', error);
+        showAlert('Error answering call', 'danger');
+    });
+}
+
+// Hangup call
+function hangupCall() {
+    if (!currentCallData) return;
+    
+    fetch('/asterisk/hangup_call', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `call_id=${currentCallData.call_id}&channel=${currentCallData.channel}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('currentCall').style.display = 'none';
+            currentCallData = null;
+            showAlert('Call hung up successfully!', 'success');
+            updateCallHistory();
+        } else {
+            showAlert('Failed to hangup call: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error hanging up call:', error);
+        showAlert('Error hanging up call', 'danger');
+    });
+}
+
+// Update call history
+function updateCallHistory() {
+    fetch('/api/calls?extension=1412&limit=10')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('callHistory');
+            tbody.innerHTML = '';
+            
+            data.calls.forEach(call => {
+                const row = document.createElement('tr');
+                const duration = call.end_time && call.start_time ? 
+                    Math.round((new Date(call.end_time) - new Date(call.start_time)) / 1000) + 's' : 
+                    'N/A';
+                
+                row.innerHTML = `
+                    <td>${call.call_id}</td>
+                    <td>${call.caller_id}</td>
+                    <td><span class="badge badge-${getStatusBadgeClass(call.status)}">${call.status}</span></td>
+                    <td>${new Date(call.start_time).toLocaleString()}</td>
+                    <td>${duration}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="viewCallDetails('${call.call_id}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error updating call history:', error);
+        });
+}
+
+// Get status badge class
+function getStatusBadgeClass(status) {
+    switch(status) {
+        case 'ringing': return 'warning';
+        case 'answered': return 'success';
+        case 'ended': return 'secondary';
+        case 'missed': return 'danger';
+        default: return 'info';
+    }
+}
+
+// View call details
+function viewCallDetails(callId) {
+    // You can implement a modal or redirect to call details page
+    console.log('Viewing call details for:', callId);
+}
+
+// Show alert
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('.alert-info'));
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    updateCallHistory();
+    
+    // Update call history every 30 seconds
+    setInterval(updateCallHistory, 30000);
+});
+</script>
+{% endblock %}
